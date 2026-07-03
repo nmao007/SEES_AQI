@@ -1,0 +1,14 @@
+# Core Math and Data Manipulation
+numpy
+pandas
+scipy
+
+# Geospatial Raster Processing
+rasterio
+
+# Deep Learning Framework
+torch
+torchvision
+
+# Visualization (To inspect your grids before training)
+matplotlib
