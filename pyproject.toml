@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sees_aqi"
+version = "0.1.0"
+description = "Spatio-temporal PINO pipeline for Lake Erie air quality simulation"
+dependencies = [
+    "torch",
+    "neuraloperator",
+    "rasterio",
+    "pandas",
+    "numpy",
+    "scipy"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
