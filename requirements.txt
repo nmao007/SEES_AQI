@@ -9,6 +9,7 @@ rasterio
 # Deep Learning Framework
 torch
 torchvision
+neuraloperator
 
 # Visualization (To inspect your grids before training)
 matplotlib
