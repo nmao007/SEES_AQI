@@ -4,6 +4,7 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
+from scipy.interpolate import griddata
 
 
 def map_wind_with_nearest_neighbor(tif_path, csv_path, target_year=2025, target_doy=179):
@@ -103,7 +104,36 @@ def map_wind_smooth_bilinear(tif_path, csv_path, target_year=2025, target_doy=17
         flat_bilinear_grid = interp_function(target_points)
         
         return flat_bilinear_grid.reshape(height, width)
+
+
+def generate_uv_raster(nasa_csv_path, map_path, day_of_year, year=2025):
+    """
+    Extracts 10m lat/lon coordinates from a GeoTIFF and interpolates 
+    sparse NASA UV data to match its exact dimensions pixel-for-pixel.
+    """
+    # 1. Extract the real-world lat/lon coordinates for every pixel
+    with rasterio.open(map_path) as src:
+        cols, rows = np.meshgrid(np.arange(src.width), np.arange(src.height))
+        xs, ys = rasterio.transform.xy(src.transform, rows, cols)
+        target_lons = np.array(xs)
+        target_lats = np.array(ys)
+        
+    # 2. Load NASA UV data and filter for the specific day
+    df = pd.read_csv(nasa_csv_path, skiprows=9)
+    day_df = df[(df['DOY'] == day_of_year) & (df['YEAR'] == year)]
     
+    known_points = day_df[['LAT', 'LON']].values
+    uv_values = day_df['ALLSKY_SFC_UV_INDEX'].values
+    
+    # 3. Smoothly interpolate sparse measurements onto the high-res pixel grid
+    uv_raster = griddata(
+        points=known_points, 
+        values=uv_values, 
+        xi=(target_lats, target_lons), 
+        method='linear'
+    )
+    
+    return uv_raster
 
 def map_visualization(map):
     # Assuming 'final_wind_channel' is the 2D array generated from the previous script
