@@ -4,7 +4,6 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
-from scipy.interpolate import griddata
 
 
 def map_wind_with_nearest_neighbor(tif_path, csv_path, target_year=2025, target_doy=179):
@@ -105,35 +104,55 @@ def map_wind_smooth_bilinear(tif_path, csv_path, target_year=2025, target_doy=17
         
         return flat_bilinear_grid.reshape(height, width)
 
+def generate_humidity_raster(csv_path, tif_path, target_doy, target_year=2025):
+    """
+    Extracts high-resolution lat/lon coordinates from a GeoTIFF and interpolates
+    sparse NASA MERRA-2 Specific Humidity (QV2M) data to match its exact dimensions.
+    """
+    # 1. Load the target GeoTIFF dimensions and transformation
+    with rasterio.open(tif_path) as src:
+        height, width = src.shape
+        transform = src.transform
 
-def generate_uv_raster(nasa_csv_path, map_path, day_of_year, year=2025):
-    """
-    Extracts 10m lat/lon coordinates from a GeoTIFF and interpolates 
-    sparse NASA UV data to match its exact dimensions pixel-for-pixel.
-    """
-    # 1. Extract the real-world lat/lon coordinates for every pixel
-    with rasterio.open(map_path) as src:
-        cols, rows = np.meshgrid(np.arange(src.width), np.arange(src.height))
-        xs, ys = rasterio.transform.xy(src.transform, rows, cols)
-        target_lons = np.array(xs)
-        target_lats = np.array(ys)
-        
-    # 2. Load NASA UV data and filter for the specific day
-    df = pd.read_csv(nasa_csv_path, skiprows=9)
-    day_df = df[(df['DOY'] == day_of_year) & (df['YEAR'] == year)]
-    
-    known_points = day_df[['LAT', 'LON']].values
-    uv_values = day_df['ALLSKY_SFC_UV_INDEX'].values
-    
-    # 3. Smoothly interpolate sparse measurements onto the high-res pixel grid
-    uv_raster = griddata(
-        points=known_points, 
-        values=uv_values, 
-        xi=(target_lats, target_lons), 
-        method='linear'
+    # 2. Load and filter the NASA CSV data
+    # skiprows=9 handles the 9 lines of header seen in your image
+    df = pd.read_csv(csv_path, skiprows=9)
+    df.columns = df.columns.str.strip()  # Clean up any trailing whitespaces in headers
+   
+    filtered_df = df[(df['YEAR'] == target_year) & (df['DOY'] == target_doy)]
+   
+    if filtered_df.empty:
+        raise ValueError(f"No data found for Year: {target_year}, DOY: {target_doy}")
+
+    # 3. Extract unique, sorted grid lines to form the interpolation axes
+    unique_lats = np.sort(filtered_df['LAT'].unique())
+    unique_lons = np.sort(filtered_df['LON'].unique())
+   
+    # 4. Pivot the flat CSV values into a structured 2D matrix matching the axes
+    # We use 'QV2M' as the target value from your dataset
+    pivot_table = filtered_df.pivot(index='LAT', columns='LON', values='QV2M')
+    humidity_source_matrix = pivot_table.loc[unique_lats, unique_lons].values
+   
+    # 5. Initialize the Bilinear Interpolator
+    interp_function = RegularGridInterpolator(
+        points=(unique_lats, unique_lons),
+        values=humidity_source_matrix,
+        method='linear',
+        bounds_error=False,
+        fill_value=None  # Extrapolates edge values automatically if the TIF exceeds the CSV bounds
     )
-    
-    return uv_raster
+   
+    # 6. Generate target coordinates for every single high-res pixel
+    rows, cols = np.indices((height, width))
+    xs, ys = rasterio.transform.xy(transform, rows.ravel(), cols.ravel())
+    target_points = np.column_stack((ys, xs)) # Format precisely as (Lat, Lon) to match points structure
+   
+    # 7. Execute interpolation and reshape back to original raster dimensions
+    print(f"Interpolating QV2M Specific Humidity grid for Year {target_year}, DOY {target_doy}...")
+    flat_humidity_grid = interp_function(target_points)
+    humidity_raster = flat_humidity_grid.reshape(height, width)
+   
+    return humidity_raster
 
 def map_visualization(map):
     # Assuming 'final_wind_channel' is the 2D array generated from the previous script
