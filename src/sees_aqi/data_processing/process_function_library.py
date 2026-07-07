@@ -104,7 +104,7 @@ def map_wind_smooth_bilinear(tif_path, csv_path, target_year=2025, target_doy=17
         
         return flat_bilinear_grid.reshape(height, width)
 
-def generate_humidity_raster(csv_path, tif_path, target_doy, target_year=2025):
+def generate_humidity_raster(tif_path, csv_path, target_doy, target_year=2025):
     """
     Extracts high-resolution lat/lon coordinates from a GeoTIFF and interpolates
     sparse NASA MERRA-2 Specific Humidity (QV2M) data to match its exact dimensions.
@@ -154,7 +154,7 @@ def generate_humidity_raster(csv_path, tif_path, target_doy, target_year=2025):
    
     return humidity_raster
 
-def map_visualization(map):
+def map_visualization(map, variable):
     # Assuming 'final_wind_channel' is the 2D array generated from the previous script
     plt.figure(figsize=(10, 8), dpi=100)
 
@@ -164,10 +164,10 @@ def map_visualization(map):
 
     # 2. Add a colorbar scale on the side so you know what the colors mean
     cbar = plt.colorbar(im, fraction=0.046, pad=0.04)
-    cbar.set_label('Wind Speed at 2 Meters (m/s)', fontsize=12, fontweight='bold')
+    cbar.set_label(variable, fontsize=12, fontweight='bold')
 
     # 3. Add titles and axis labels
-    plt.title('NASA/POWER Interpolated Wind Speed Grid (30km Box)', fontsize=14, fontweight='bold', pad=15)
+    plt.title('NASA/POWER Interpolated ' + variable + ' Grid', fontsize=14, fontweight='bold', pad=15)
     plt.xlabel('Pixel X Column (10m Resolution)', fontsize=10)
     plt.ylabel('Pixel Y Row (10m Resolution)', fontsize=10)
 

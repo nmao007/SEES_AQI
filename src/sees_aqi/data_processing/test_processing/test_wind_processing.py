@@ -5,8 +5,8 @@ CSV_FILE_PATH = "data/test_data/test_csvs/Wind Speed At 2Meters (Western Basin A
 
 wind_matrix_nn = process.map_wind_with_nearest_neighbor(TIF_FILE_PATH, CSV_FILE_PATH, target_year=2025, target_doy=179)
 
-process.map_visualization(wind_matrix_nn)
+process.map_visualization(wind_matrix_nn, 'Wind Speed at 2m')
 
 wind_matrix_smooth = process.map_wind_smooth_bilinear(TIF_FILE_PATH, CSV_FILE_PATH, target_year=2025, target_doy=179)
 
-process.map_visualization(wind_matrix_smooth)
+process.map_visualization(wind_matrix_smooth, 'Wind Speed at 2m')
