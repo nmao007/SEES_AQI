@@ -209,7 +209,7 @@ def generate_humidity_raster(tif_path, csv_path, target_doy, target_year=2025):
    
     return humidity_raster
 
-def generate_uv_raster(csv_path, tif_path, target_doy, target_year=2025):
+def generate_uv_raster(tif_path, csv_path, target_doy, target_year=2025):
     """
     Extracts high-resolution lat/lon coordinates from a GeoTIFF and interpolates
     sparse NASA UV Index data using griddata to match its exact dimensions.
