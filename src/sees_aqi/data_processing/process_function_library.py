@@ -103,6 +103,60 @@ def map_wind_smooth_bilinear(tif_path, csv_path, target_year=2025, target_doy=17
         flat_bilinear_grid = interp_function(target_points)
         
         return flat_bilinear_grid.reshape(height, width)
+    
+def map_wind_speed_direction(tif_path, speed_csv_path, dir_csv_path, target_year=2025, target_doy=179):
+    # 1. Load the target GeoTIFF dimensions
+    with rasterio.open(tif_path) as src:
+        height, width = src.shape
+        transform = src.transform
+        
+    # 2. Load and filter both CSVs (skipping headers)
+    df_speed = pd.read_csv(speed_csv_path, skiprows=9)
+    df_speed.columns = df_speed.columns.str.strip()
+    df_speed = df_speed[(df_speed['YEAR'] == target_year) & (df_speed['DOY'] == target_doy)]
+    
+    df_dir = pd.read_csv(dir_csv_path, skiprows=9)
+    df_dir.columns = df_dir.columns.str.strip()
+    df_dir = df_dir[(df_dir['YEAR'] == target_year) & (df_dir['DOY'] == target_doy)]
+    
+    # 3. Merge the datasets side-by-side using their matching coordinates
+    merged_df = pd.merge(df_speed, df_dir, on=['LAT', 'LON'])
+    
+    if merged_df.empty:
+        raise ValueError(f"No matching wind data found for Year: {target_year}, DOY: {target_doy}")
+    
+    # 4. Calculate U & V vector components
+    rad = np.radians(merged_df['WD2M'].values)
+    speed = merged_df['WS2M'].values
+    
+    merged_df['U'] = -speed * np.sin(rad)
+    merged_df['V'] = -speed * np.cos(rad)
+    
+    # 5. Extract unique grid lines for interpolation axes
+    unique_lats = np.sort(merged_df['LAT'].unique())
+    unique_lons = np.sort(merged_df['LON'].unique())
+    
+    # 6. Pivot into 2D source matrices
+    pivot_u = merged_df.pivot(index='LAT', columns='LON', values='U')
+    pivot_v = merged_df.pivot(index='LAT', columns='LON', values='V')
+    
+    u_source_matrix = pivot_u.loc[unique_lats, unique_lons].values
+    v_source_matrix = pivot_v.loc[unique_lats, unique_lons].values
+    
+    # 7. Initialize Interpolators
+    interp_u = RegularGridInterpolator((unique_lats, unique_lons), u_source_matrix, method='linear', bounds_error=False, fill_value=None)
+    interp_v = RegularGridInterpolator((unique_lats, unique_lons), v_source_matrix, method='linear', bounds_error=False, fill_value=None)
+    
+    # 8. Generate target coordinates and interpolate
+    rows, cols = np.indices((height, width))
+    xs, ys = rasterio.transform.xy(transform, rows.ravel(), cols.ravel())
+    target_points = np.column_stack((ys, xs)) 
+    
+    print(f"Merging and interpolating wind vectors for DOY {target_doy}...")
+    u_raster = interp_u(target_points).reshape(height, width)
+    v_raster = interp_v(target_points).reshape(height, width)
+    
+    return u_raster, v_raster
 
 def generate_humidity_raster(tif_path, csv_path, target_doy, target_year=2025):
     """
