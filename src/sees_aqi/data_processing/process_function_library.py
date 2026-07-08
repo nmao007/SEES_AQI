@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 from scipy.spatial import cKDTree
-from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 
 
@@ -105,62 +104,6 @@ def map_wind_smooth_bilinear(tif_path, csv_path, target_year=2025, target_doy=17
         
         return flat_bilinear_grid.reshape(height, width)
 
-
-def map_wind_speed_direction(tif_path, speed_csv_path, dir_csv_path, target_year=2025, target_doy=179):
-    # 1. Load the target GeoTIFF dimensions
-    with rasterio.open(tif_path) as src:
-        height, width = src.shape
-        transform = src.transform
-        
-    # 2. Load and filter both CSVs (skipping headers)
-    df_speed = pd.read_csv(speed_csv_path, skiprows=9)
-    df_speed.columns = df_speed.columns.str.strip()
-    df_speed = df_speed[(df_speed['YEAR'] == target_year) & (df_speed['DOY'] == target_doy)]
-    
-    df_dir = pd.read_csv(dir_csv_path, skiprows=9)
-    df_dir.columns = df_dir.columns.str.strip()
-    df_dir = df_dir[(df_dir['YEAR'] == target_year) & (df_dir['DOY'] == target_doy)]
-    
-    # 3. Merge the datasets side-by-side using their matching coordinates
-    merged_df = pd.merge(df_speed, df_dir, on=['LAT', 'LON'])
-    
-    if merged_df.empty:
-        raise ValueError(f"No matching wind data found for Year: {target_year}, DOY: {target_doy}")
-    
-    # 4. Calculate U & V vector components
-    rad = np.radians(merged_df['WD2M'].values)
-    speed = merged_df['WS2M'].values
-    
-    merged_df['U'] = -speed * np.sin(rad)
-    merged_df['V'] = -speed * np.cos(rad)
-    
-    # 5. Extract unique grid lines for interpolation axes
-    unique_lats = np.sort(merged_df['LAT'].unique())
-    unique_lons = np.sort(merged_df['LON'].unique())
-    
-    # 6. Pivot into 2D source matrices
-    pivot_u = merged_df.pivot(index='LAT', columns='LON', values='U')
-    pivot_v = merged_df.pivot(index='LAT', columns='LON', values='V')
-    
-    u_source_matrix = pivot_u.loc[unique_lats, unique_lons].values
-    v_source_matrix = pivot_v.loc[unique_lats, unique_lons].values
-    
-    # 7. Initialize Interpolators
-    interp_u = RegularGridInterpolator((unique_lats, unique_lons), u_source_matrix, method='linear', bounds_error=False, fill_value=None)
-    interp_v = RegularGridInterpolator((unique_lats, unique_lons), v_source_matrix, method='linear', bounds_error=False, fill_value=None)
-    
-    # 8. Generate target coordinates and interpolate
-    rows, cols = np.indices((height, width))
-    xs, ys = rasterio.transform.xy(transform, rows.ravel(), cols.ravel())
-    target_points = np.column_stack((ys, xs)) 
-    
-    print(f"Merging and interpolating wind vectors for DOY {target_doy}...")
-    u_raster = interp_u(target_points).reshape(height, width)
-    v_raster = interp_v(target_points).reshape(height, width)
-    
-    return u_raster, v_raster
-
-
 def generate_humidity_raster(tif_path, csv_path, target_doy, target_year=2025):
     """
     Extracts high-resolution lat/lon coordinates from a GeoTIFF and interpolates
@@ -211,48 +154,107 @@ def generate_humidity_raster(tif_path, csv_path, target_doy, target_year=2025):
    
     return humidity_raster
 
-def generate_uv_raster(tif_path, csv_path, target_doy, target_year=2025):
+def generate_precipitation_raster(tif_path, csv_path, target_doy, target_year=2025, col_name='PRECTOT'):
     """
     Extracts high-resolution lat/lon coordinates from a GeoTIFF and interpolates
-    sparse NASA UV Index data using griddata to match its exact dimensions.
+    sparse NASA precipitation data (e.g., PRECTOT) to match its exact dimensions.
     """
-    # 1. Load the target GeoTIFF metadata and geometry
+    # 1. Load the target GeoTIFF dimensions and transformation
     with rasterio.open(tif_path) as src:
         height, width = src.shape
         transform = src.transform
-        
-        # Generate matrices of pixel coordinates
-        cols, rows = np.meshgrid(np.arange(width), np.arange(height))
-        # Convert pixel positions to real-world longitude (xs) and latitude (ys)
-        xs, ys = rasterio.transform.xy(transform, rows, cols)
-        target_lons = np.array(xs)
-        target_lats = np.array(ys)
 
     # 2. Load and filter the NASA CSV data
+    # skiprows=9 handles the 9 lines of metadata headers
     df = pd.read_csv(csv_path, skiprows=9)
     df.columns = df.columns.str.strip()  # Clean up any trailing whitespaces in headers
    
     filtered_df = df[(df['YEAR'] == target_year) & (df['DOY'] == target_doy)]
    
     if filtered_df.empty:
-        raise ValueError(f"No UV data found for Year: {target_year}, DOY: {target_doy}")
+        raise ValueError(f"No data found for Year: {target_year}, DOY: {target_doy}")
+        
+    if col_name not in filtered_df.columns:
+        raise KeyError(f"Column '{col_name}' not found in the dataset. Available columns: {list(filtered_df.columns)}")
 
-    # 3. Extract known coordinate anchor points and their UV values
-    known_coords = filtered_df[['LAT', 'LON']].values
-    uv_values = filtered_df['ALLSKY_SFC_UV_INDEX'].values
+    # 3. Extract unique, sorted grid lines to form the interpolation axes
+    unique_lats = np.sort(filtered_df['LAT'].unique())
+    unique_lons = np.sort(filtered_df['LON'].unique())
    
-    # 4. Execute spatial interpolation directly onto the target coordinate mesh
-    print(f"Interpolating UV Index grid for Year {target_year}, DOY {target_doy}...")
-    flat_uv_raster = griddata(
-        points=known_coords,
-        values=uv_values,
-        xi=(target_lats, target_lons),
-        method='linear'
+    # 4. Pivot the flat CSV values into a structured 2D matrix matching the axes
+    pivot_table = filtered_df.pivot(index='LAT', columns='LON', values=col_name)
+    precip_source_matrix = pivot_table.loc[unique_lats, unique_lons].values
+   
+    # 5. Initialize the Bilinear Interpolator ('linear' on regular grids = bilinear)
+    interp_function = RegularGridInterpolator(
+        points=(unique_lats, unique_lons),
+        values=precip_source_matrix,
+        method='linear',
+        bounds_error=False,
+        fill_value=None  # Extrapolates edge values automatically if the TIF exceeds the CSV bounds
     )
-
-    uv_raster = flat_uv_raster.reshape(height, width)
    
-    return uv_raster
+    # 6. Generate target coordinates for every single high-res pixel
+    rows, cols = np.indices((height, width))
+    xs, ys = rasterio.transform.xy(transform, rows.ravel(), cols.ravel())
+    target_points = np.column_stack((ys, xs)) # Format precisely as (Lat, Lon) to match points structure
+   
+    # 7. Execute interpolation and reshape back to original raster dimensions
+    print(f"Interpolating {col_name} Precipitation grid for Year {target_year}, DOY {target_doy}...")
+    flat_precip_grid = interp_function(target_points)
+    precip_raster = flat_precip_grid.reshape(height, width)
+   
+    return precip_raster
+
+def generate_temperature_raster(tif_path, csv_path, target_doy, target_year=2025):
+    """
+    Extracts high-resolution lat/lon coordinates from a GeoTIFF and interpolates
+    sparse NASA MERRA-2 Temperature at 2 Meters (T2M) data to match its exact dimensions.
+    """
+    # 1. Load the target GeoTIFF dimensions and transformation
+    with rasterio.open(tif_path) as src:
+        height, width = src.shape
+        transform = src.transform
+
+    # 2. Load and filter the NASA CSV data
+    # skiprows=9 handles the 9 lines of header seen in your image
+    df = pd.read_csv(csv_path, skiprows=9)
+    df.columns = df.columns.str.strip()  # Clean up any trailing whitespaces in headers
+   
+    filtered_df = df[(df['YEAR'] == target_year) & (df['DOY'] == target_doy)]
+   
+    if filtered_df.empty:
+        raise ValueError(f"No data found for Year: {target_year}, DOY: {target_doy}")
+
+    # 3. Extract unique, sorted grid lines to form the interpolation axes
+    unique_lats = np.sort(filtered_df['LAT'].unique())
+    unique_lons = np.sort(filtered_df['LON'].unique())
+   
+    # 4. Pivot the flat CSV values into a structured 2D matrix matching the axes
+    # Uses 'T2M' directly from your dataset column header
+    pivot_table = filtered_df.pivot(index='LAT', columns='LON', values='T2M')
+    temp_source_matrix = pivot_table.loc[unique_lats, unique_lons].values
+   
+    # 5. Initialize the Bilinear Interpolator
+    interp_function = RegularGridInterpolator(
+        points=(unique_lats, unique_lons),
+        values=temp_source_matrix,
+        method='linear',
+        bounds_error=False,
+        fill_value=None  # Extrapolates edge values automatically if the TIF exceeds the CSV bounds
+    )
+   
+    # 6. Generate target coordinates for every single high-res pixel
+    rows, cols = np.indices((height, width))
+    xs, ys = rasterio.transform.xy(transform, rows.ravel(), cols.ravel())
+    target_points = np.column_stack((ys, xs)) # Format precisely as (Lat, Lon) to match points structure
+   
+    # 7. Execute interpolation and reshape back to original raster dimensions
+    print(f"Interpolating T2M Temperature grid for Year {target_year}, DOY {target_doy}...")
+    flat_temp_grid = interp_function(target_points)
+    temperature_raster = flat_temp_grid.reshape(height, width)
+   
+    return temperature_raster
 
 def map_visualization(map, variable):
     # Assuming 'final_wind_channel' is the 2D array generated from the previous script
