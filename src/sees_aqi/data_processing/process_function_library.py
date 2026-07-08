@@ -241,12 +241,14 @@ def generate_uv_raster(tif_path, csv_path, target_doy, target_year=2025):
    
     # 4. Execute spatial interpolation directly onto the target coordinate mesh
     print(f"Interpolating UV Index grid for Year {target_year}, DOY {target_doy}...")
-    uv_raster = griddata(
+    flat_uv_raster = griddata(
         points=known_coords,
         values=uv_values,
         xi=(target_lats, target_lons),
         method='linear'
     )
+
+    uv_raster = flat_uv_raster.reshape(height, width)
    
     return uv_raster
 
