@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 from scipy.spatial import cKDTree
+from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 
 
@@ -207,6 +208,47 @@ def generate_humidity_raster(tif_path, csv_path, target_doy, target_year=2025):
     humidity_raster = flat_humidity_grid.reshape(height, width)
    
     return humidity_raster
+
+def generate_uv_raster(csv_path, tif_path, target_doy, target_year=2025):
+    """
+    Extracts high-resolution lat/lon coordinates from a GeoTIFF and interpolates
+    sparse NASA UV Index data using griddata to match its exact dimensions.
+    """
+    # 1. Load the target GeoTIFF metadata and geometry
+    with rasterio.open(tif_path) as src:
+        height, width = src.shape
+        transform = src.transform
+        
+        # Generate matrices of pixel coordinates
+        cols, rows = np.meshgrid(np.arange(width), np.arange(height))
+        # Convert pixel positions to real-world longitude (xs) and latitude (ys)
+        xs, ys = rasterio.transform.xy(transform, rows, cols)
+        target_lons = np.array(xs)
+        target_lats = np.array(ys)
+
+    # 2. Load and filter the NASA CSV data
+    df = pd.read_csv(csv_path, skiprows=9)
+    df.columns = df.columns.str.strip()  # Clean up any trailing whitespaces in headers
+   
+    filtered_df = df[(df['YEAR'] == target_year) & (df['DOY'] == target_doy)]
+   
+    if filtered_df.empty:
+        raise ValueError(f"No UV data found for Year: {target_year}, DOY: {target_doy}")
+
+    # 3. Extract known coordinate anchor points and their UV values
+    known_coords = filtered_df[['LAT', 'LON']].values
+    uv_values = filtered_df['ALLSKY_SFC_UV_INDEX'].values
+   
+    # 4. Execute spatial interpolation directly onto the target coordinate mesh
+    print(f"Interpolating UV Index grid for Year {target_year}, DOY {target_doy}...")
+    uv_raster = griddata(
+        points=known_coords,
+        values=uv_values,
+        xi=(target_lats, target_lons),
+        method='linear'
+    )
+   
+    return uv_raster
 
 def generate_precipitation_raster(tif_path, csv_path, target_doy, target_year=2025, col_name='PRECTOT'):
     """
