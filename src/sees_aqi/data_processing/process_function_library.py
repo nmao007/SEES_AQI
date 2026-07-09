@@ -105,7 +105,7 @@ def map_wind_smooth_bilinear(tif_path, csv_path, target_year=2025, target_doy=17
         
         return flat_bilinear_grid.reshape(height, width)
     
-def map_wind_speed_direction(tif_path, speed_csv_path, dir_csv_path, target_year=2025, target_doy=179):
+def map_wind_speed_direction(tif_path, speed_csv_path, dir_csv_path, height_str, target_year=2025, target_doy=179):
     # 1. Load the target GeoTIFF dimensions
     with rasterio.open(tif_path) as src:
         height, width = src.shape
@@ -127,8 +127,8 @@ def map_wind_speed_direction(tif_path, speed_csv_path, dir_csv_path, target_year
         raise ValueError(f"No matching wind data found for Year: {target_year}, DOY: {target_doy}")
     
     # 4. Calculate U & V vector components
-    rad = np.radians(merged_df['WD2M'].values)
-    speed = merged_df['WS2M'].values
+    rad = np.radians(merged_df[height_str].values)
+    speed = merged_df[height_str].values
     
     merged_df['U'] = -speed * np.sin(rad)
     merged_df['V'] = -speed * np.cos(rad)
@@ -252,7 +252,7 @@ def generate_uv_raster(tif_path, csv_path, target_doy, target_year=2025):
    
     return uv_raster
 
-def generate_precipitation_raster(tif_path, csv_path, target_doy, target_year=2025, col_name='PRECTOT'):
+def generate_precipitation_raster(tif_path, csv_path, target_doy, target_year=2025, col_name='PRECTOTCORR'):
     """
     Extracts high-resolution lat/lon coordinates from a GeoTIFF and interpolates
     sparse NASA precipitation data (e.g., PRECTOT) to match its exact dimensions.

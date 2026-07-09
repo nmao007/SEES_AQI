@@ -12,6 +12,6 @@ wind_matrix_smooth = process.map_wind_smooth_bilinear(TIF_FILE_PATH, SPEED_FILE_
 
 process.map_visualization(wind_matrix_smooth, 'Wind Speed at 2m')
 
-u_wind, v_wind = process.map_wind_speed_direction(tif_path=TIF_FILE_PATH, speed_csv_path=SPEED_FILE_PATH, dir_csv_path=DIR_FILE_PATH, target_year=2025, target_doy=179)
+u_wind, v_wind = process.map_wind_speed_direction(tif_path=TIF_FILE_PATH, speed_csv_path=SPEED_FILE_PATH, dir_csv_path=DIR_FILE_PATH, height_str='WS2M', target_year=2025, target_doy=179)
 process.map_visualization(u_wind, 'East-West wind at 2m')
 process.map_visualization(v_wind, 'North-South wind at 2m')
