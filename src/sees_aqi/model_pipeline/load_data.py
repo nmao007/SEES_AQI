@@ -14,7 +14,7 @@ def load_processed_data(data_dir="data/processed_maps", num_time_steps=4):
         "processed_elevation.tif", "processed_humidity.tif",
         "processed_precipitation.tif", "processed_temperature.tif",
         "processed_uv_index.tif",
-        "processed_algae_biomass.tif"  # <-- Added as Channel Index 9
+        "lake_algae_2025_full.tif"  # <-- Added as Channel Index 9
     ]
     
     loaded_channels = []

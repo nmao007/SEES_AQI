@@ -12,7 +12,7 @@ TARGET_DOY = 179
 BASE_TIF_PATH = 'data/raw_data/raw_algae_map/lake_algae_2025_full.tif'
 
 #Output Dir
-OUTPUT_DIR = 'data/processed_maps'
+OUTPUT_DIR = 'data/final_maps'
 
 # Raw CSV Sources
 WIND_SPEED_2M_CSV = 'data/processed_csvs/data_publicCSV/Wind Speed At 2Meters (Western Basin Area) - POWER_Regional_Daily_20250628_20260628.csv'
