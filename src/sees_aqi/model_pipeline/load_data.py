@@ -3,7 +3,7 @@ import rasterio
 import numpy as np
 import torch
 
-def load_processed_data(data_dir="data/processed_maps", num_time_steps=4):
+def load_processed_data(data_dir="data/final_maps", num_time_steps=4):
     """
     Loads 10 processed raster maps (including satellite biomass) 
     and stacks them into an FNO space-time tensor.

@@ -16,7 +16,7 @@ def train_pipeline(epochs=30, lr=0.002):
     
     # Load your multi-channel spatial environmental tensor
     # Returns Shape: [Batch=1, Channels=9, Height, Width, Time=4]
-    inputs = load_processed_data(data_dir="data/processed_maps", num_time_steps=4)
+    inputs = load_processed_data(data_dir="data/final_maps", num_time_steps=4)
     inputs = inputs.to(device)
     
     # Initialize the official library FNO model
