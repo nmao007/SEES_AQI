@@ -1,3 +1,6 @@
 **/__pycache__/
 .venv/
 *.egg-info
+*.tif 
+lake_algae_2025.tif!
+test_files.py

@@ -3,35 +3,31 @@ import rasterio
 import numpy as np
 import torch
 
-def load_processed_data(data_dir):
+def load_processed_data(data_dir="data/processed_maps", num_time_steps=4):
     """
-    Loads separate processed raster layers from disk and aggregates them.
-    
-    Args:
-        data_dir (str): Path to the folder containing processed tifs.
-    Returns:
-        inputs (Tensor): Shapes [1, 3, Height, Width, 4] containing
-                         [Algae, U_wind, V_wind] duplicated across 4 time steps.
+    Loads 10 processed raster maps (including satellite biomass) 
+    and stacks them into an FNO space-time tensor.
     """
-    print(f"Loading processed 10m layers from: {data_dir}")
+    layer_files = [
+        "processed_2m_u_wind.tif", "processed_2m_v_wind.tif",
+        "processed_10m_u_wind.tif", "processed_10m_v_wind.tif",
+        "processed_elevation.tif", "processed_humidity.tif",
+        "processed_precipitation.tif", "processed_temperature.tif",
+        "processed_uv_index.tif",
+        "processed_algae_biomass.tif"  # <-- Added as Channel Index 9
+    ]
     
-    # Define file paths
-    algae_path = os.path.join(data_dir, "processed_algae.tif")
-    u_wind_path = os.path.join(data_dir, "processed_u_wind.tif")
-    v_wind_path = os.path.join(data_dir, "processed_v_wind.tif")
-    
-    # Read the individual raster channels
-    with rasterio.open(algae_path) as src:
-        algae = src.read(1).astype(np.float32)
-    with rasterio.open(u_wind_path) as src:
-        u_wind = src.read(1).astype(np.float32)
-    with rasterio.open(v_wind_path) as src:
-        v_wind = src.read(1).astype(np.float32)
-        
-    # Stack channels along the first axis: shape becomes [3, Height, Width]
-    frame = np.stack([algae, u_wind, v_wind], axis=0)
-    
-    # Convert to torch tensor, add Batch dim, and project across Time dimension (T=4)
-    # Target shape: [Batch=1, Channels=3, Height, Width, Time=4]
-    inputs = torch.from_numpy(frame).float().unsqueeze(0).repeat(1, 1, 1, 1, 4)
-    return inputs
+    loaded_channels = []
+    for filename in layer_files:
+        full_path = os.path.join(data_dir, filename)
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"Missing required pipeline layer: '{full_path}'")
+            
+        with rasterio.open(full_path) as src:
+            channel_data = src.read(1).astype(np.float32)
+            channel_data = np.nan_to_num(channel_data, nan=0.0, posinf=0.0, neginf=0.0)
+            loaded_channels.append(channel_data)
+            
+    # Stack to [10, H, W], add Batch -> [1, 10, H, W], repeat across Time -> [1, 10, H, W, T]
+    tensor_grid = torch.from_numpy(np.stack(loaded_channels, axis=0)).float().unsqueeze(0)
+    return tensor_grid.unsqueeze(-1).repeat(1, 1, 1, 1, num_time_steps)
