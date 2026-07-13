@@ -6,8 +6,8 @@ from load_data import load_processed_data
 def run_local_inference_and_visualize():
     # 1. Initialize the 2D architecture
     model = FNO(
-        n_modes=(12, 12),
-        hidden_channels=12,
+        n_modes=(16, 16),    # Changed from (12, 12) to match checkpoint
+        hidden_channels=24,  # Changed from 12 to 24
         in_channels=10,
         out_channels=1
     )

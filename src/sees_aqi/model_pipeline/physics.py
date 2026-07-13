@@ -1,14 +1,14 @@
 import torch
 
 # --- Physical Configuration Scale ---
-DX = 10.0         # 10-meter pixel grid spacing
+DX = 40.0         # 40-meter pixel grid spacing (Adjusted for 4x downsampling)
 DT = 86400.0      # 24 hours in seconds (60s * 60m * 24h)
 
 def compute_comprehensive_physics_loss(pred, inputs):
     """
     Computes PINO loss for a 24-hour forward forecast.
     Inputs = Day N weather/biomass conditions.
-    Pred = Predicted Airborne Toxin at Day N+1.
+    Pred = Predicted Airborne Toxin at Day N+1 (Passed through softplus).
     """
     # 1. Isolate all 10 input layers (Day N)
     u_10m   = inputs[:, 2:3, ...]
@@ -18,19 +18,19 @@ def compute_comprehensive_physics_loss(pred, inputs):
     uv      = inputs[:, 8:9, ...]
     biomass = inputs[:, 9:10, ...] 
 
-    # 2. Compute Spatial Derivatives of Tomorrow's Predicted Toxin (C_tomorrow)
-    dC_dx = (pred[:, :, 2:, 1:-1] - pred[:, :, :-2, 1:-1]) / (2 * DX)
-    dC_dy = (pred[:, :, 1:-1, 2:] - pred[:, :, 1:-1, :-2]) / (2 * DX)
+    # 2. Compute Spatial Derivatives (PyTorch dimensions: [B, C, Height/Y, Width/X])
+    # FIXED: Index 2 is rows (Y-axis), Index 3 is columns (X-axis)
+    dC_dy = (pred[:, :, 2:, 1:-1] - pred[:, :, :-2, 1:-1]) / (2 * DX)
+    dC_dx = (pred[:, :, 1:-1, 2:] - pred[:, :, 1:-1, :-2]) / (2 * DX)
     
-    d2C_dx2 = (pred[:, :, 2:, 1:-1] - 2 * pred[:, :, 1:-1, 1:-1] + pred[:, :, :-2, 1:-1]) / (DX ** 2)
-    d2C_dy2 = (pred[:, :, 1:-1, 2:] - 2 * pred[:, :, 1:-1, 1:-1] + pred[:, :, 1:-1, :-2]) / (DX ** 2)
+    d2C_dy2 = (pred[:, :, 2:, 1:-1] - 2 * pred[:, :, 1:-1, 1:-1] + pred[:, :, :-2, 1:-1]) / (DX ** 2)
+    d2C_dx2 = (pred[:, :, 1:-1, 2:] - 2 * pred[:, :, 1:-1, 1:-1] + pred[:, :, 1:-1, :-2]) / (DX ** 2)
 
-    # 3. Reintroduce the Temporal Derivative (dC_dt)
-    # We assume the air started clean (0.0) on Day N, and accumulates to 'pred' on Day N+1
+    # 3. Temporal Derivative (dC_dt)
     C_today = 0.0
     dC_dt = (pred[:, :, 1:-1, 1:-1] - C_today) / DT
 
-    # 4. Slice Input Layers to match the interior grid
+    # 4. Slice Input Layers to match the interior grid spatial dims
     u_10m_int   = u_10m[:, :, 1:-1, 1:-1]
     v_10m_int   = v_10m[:, :, 1:-1, 1:-1]
     temp_int    = temp[:, :, 1:-1, 1:-1]
@@ -38,12 +38,13 @@ def compute_comprehensive_physics_loss(pred, inputs):
     biomass_int = biomass[:, :, 1:-1, 1:-1]
 
     # 5. Calculate Emissions and Diffusion based on Day N conditions
-    D = 0.05  # Simplified base diffusion parameter
+    D = 0.05  # Base diffusion parameter
     biological_toxin_potential = biomass_int * torch.sigmoid(temp_int - 20.0) * torch.relu(uv_int)
     wind_speed_10m = torch.sqrt(u_10m_int**2 + v_10m_int**2 + 1e-6)
     emission_source_term = 0.005 * wind_speed_10m * biological_toxin_potential
 
     # 6. Assemble the Time-Dependent Transport PDE Residual
+    # FIXED: Horizontal wind (u) maps to dC_dx, vertical wind (v) maps to dC_dy
     advection_term = (u_10m_int * dC_dx) + (v_10m_int * dC_dy)
     diffusion_term = D * (d2C_dx2 + d2C_dy2)
     
