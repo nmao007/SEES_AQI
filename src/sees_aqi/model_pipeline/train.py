@@ -21,8 +21,8 @@ def train_pipeline(epochs=30, lr=0.002):
     
     # Initialize the official library FNO model
     model = FNO(
-        n_modes=(16, 16),    # Changed from (4, 4, 2) to a 2-tuple for 2D spatial waves
-        hidden_channels=32,  # Boosted capacity for sharper spatial boundaries
+        n_modes=(16, 16),    
+        hidden_channels=24,  # Boosted capacity for sharper spatial boundaries
         in_channels=10,      # Your 10 clean raster maps
         out_channels=1       # Tomorrow's forecasted toxin concentration map
     ).to(device)
@@ -37,9 +37,8 @@ def train_pipeline(epochs=30, lr=0.002):
     for epoch in range(1, epochs + 1):
         optimizer.zero_grad()
         
-        # Pass the 9 environmental layers through the library's FNO network
-        # Output shape: [Batch=1, Channels=1, Height, Width, Time=4]
-        predictions = model(inputs)
+        raw_predictions = model(inputs)
+        predictions = torch.softplus(raw_predictions)
         
         # Enforce physical constraints across all layers via your custom physics engine
         physics_loss = compute_comprehensive_physics_loss(predictions, inputs)

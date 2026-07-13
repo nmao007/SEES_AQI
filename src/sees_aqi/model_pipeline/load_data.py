@@ -5,8 +5,8 @@ import torch
 
 def load_processed_data(data_dir="data/final_maps"):
     """
-    Loads 10 processed raster maps (including satellite biomass) 
-    and stacks them into a lean 2D spatial FNO tensor.
+    Loads 10 processed raster maps, automatically downsamples them 4x
+    to prevent VRAM crashes, and formats them for the 2D FNO.
     """
     layer_files = [
         "processed_2m_u_wind.tif", "processed_2m_v_wind.tif",
@@ -26,6 +26,11 @@ def load_processed_data(data_dir="data/final_maps"):
         with rasterio.open(full_path) as src:
             channel_data = src.read(1).astype(np.float32)
             channel_data = np.nan_to_num(channel_data, nan=0.0, posinf=0.0, neginf=0.0)
+            
+            # Downsample 4x by taking every 4th pixel
+            # Drops grid from (4809, 6406) down to (1203, 1602)
+            channel_data = channel_data[::4, ::4]
+            
             loaded_channels.append(channel_data)
             
     # Stack channels to [10, H, W] and add Batch dimension -> [1, 10, H, W]
