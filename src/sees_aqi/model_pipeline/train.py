@@ -16,16 +16,15 @@ def train_pipeline(epochs=30, lr=0.002):
     
     # Load your multi-channel spatial environmental tensor
     # Returns Shape: [Batch=1, Channels=9, Height, Width, Time=4]
-    inputs = load_processed_data(data_dir="data/final_maps", num_time_steps=4)
+    inputs = load_processed_data(data_dir="data/final_maps")
     inputs = inputs.to(device)
     
     # Initialize the official library FNO model
-    # n_modes maps to your 3D dimensions: (Height modes, Width modes, Time modes)
     model = FNO(
-        n_modes=(4, 4, 2), 
-        hidden_channels=20, # Matches our previous 'width' representation
-        in_channels=9,      # Your 9 environmental raster channels
-        out_channels=1      # 1 target channel (Algae concentration output)
+        n_modes=(16, 16),    # Changed from (4, 4, 2) to a 2-tuple for 2D spatial waves
+        hidden_channels=32,  # Boosted capacity for sharper spatial boundaries
+        in_channels=10,      # Your 10 clean raster maps
+        out_channels=1       # Tomorrow's forecasted toxin concentration map
     ).to(device)
     
     # Initialize optimization parameter weights
@@ -55,7 +54,7 @@ def train_pipeline(epochs=30, lr=0.002):
             print(f"Epoch [{epoch:02d}/{epochs}] | "
                   f"Total Physics Residual Loss: {physics_loss.item():.6f} | "
                   f"Current LR: {optimizer.param_groups[0]['lr']:.6f}")
-            
+
     # Save optimized network parameters to disk
     os.makedirs("models", exist_ok=True)
     save_path = "models/fno_algae_physics_model.pt"
