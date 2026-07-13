@@ -10,7 +10,7 @@ from neuralop.models import FNO
 from load_data import load_processed_data
 from physics import compute_comprehensive_physics_loss
 
-def train_pipeline(epochs=300, lr=0.002):
+def train_pipeline(epochs=500, lr=0.002):
     # Setup Lightning AI GPU acceleration if available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Training cluster initialized on hardware accelerator: {device}")
