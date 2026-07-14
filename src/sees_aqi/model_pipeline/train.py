@@ -75,4 +75,4 @@ def train_pipeline(epochs=500, lr=0.002):
     print(f"\nOptimization complete! Model weights cleanly stored to: {save_path}")
 
 if __name__ == "__main__":
-    train_pipeline(epochs=300, lr=0.002)
+    train_pipeline(epochs=500, lr=0.002)

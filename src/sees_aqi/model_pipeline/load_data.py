@@ -9,12 +9,11 @@ def load_processed_data(data_dir="data/final_maps"):
     to prevent VRAM crashes, and formats them for the 2D FNO.
     """
     layer_files = [
-        "processed_2m_u_wind.tif", "processed_2m_v_wind.tif",
+        "lake_algae_2025_final.tif", "processed_2m_u_wind.tif", "processed_2m_v_wind.tif",
         "processed_10m_u_wind.tif", "processed_10m_v_wind.tif",
         "processed_elevation.tif", "processed_humidity.tif",
         "processed_precipitation.tif", "processed_temperature.tif",
-        "processed_uv_index.tif",
-        "lake_algae_2025_full.tif"  
+        "processed_uv_index.tif",  
     ]
     
     loaded_channels = []

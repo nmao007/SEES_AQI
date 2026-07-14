@@ -8,6 +8,8 @@ def calculate_physics_loss(predictions, inputs, dx=40.0, dt=86400.0, D=0.05):
     inputs shape: [batch_size, 9, height, width]
     predictions shape: [batch_size, 1, height, width]
     """
+    dy = dx  # Assume square grid pixels (40m x 40m)
+    
     # 1. CORRECT CHANNEL EXTRACTIONS
     c_today   = inputs[:, 0:1, :, :]  # Channel 0: Toxin concentration at t0
     u_wind_10 = inputs[:, 1:2, :, :]  # Channel 1: 10m Wind U (for Advection)
@@ -27,11 +29,12 @@ def calculate_physics_loss(predictions, inputs, dx=40.0, dt=86400.0, D=0.05):
     algae_physics = torch.clamp(algae, min=0.0)
     
     # 4. EMISSIONS (Calculated using 2m wind speed)
+    # WARNING: If temp is normalized to [0,1], change -20.0 to your scaled threshold (e.g., -0.5)
     thermal_switch = torch.sigmoid(temp - 20.0)
     uv_trigger = torch.relu(uv)
     
     # S(x, y) is automatically 0 on land because algae_physics is 0 on land
-    S = 0.005 * wind_2m * algae_physics * thermal_switch * uv_trigger
+    emissions = 0.005 * wind_2m * algae_physics * thermal_switch * uv_trigger
     
     # 5. SPATIAL DERIVATIVES (Central Differences)
     # Pad to maintain spatial resolution at the grid boundaries
@@ -39,10 +42,10 @@ def calculate_physics_loss(predictions, inputs, dx=40.0, dt=86400.0, D=0.05):
     
     # Row axis = y, Col axis = x
     dC_dx = (c_padded[:, :, 1:-1, 2:] - c_padded[:, :, 1:-1, :-2]) / (2.0 * dx)
-    dC_dy = (c_padded[:, :, 2:, 1:-1] - c_padded[:, :, :-2, 1:-1]) / (2.0 * dx)
+    dC_dy = (c_padded[:, :, 2:, 1:-1] - c_padded[:, :, :-2, 1:-1]) / (2.0 * dy)
     
     d2C_dx2 = (c_padded[:, :, 1:-1, 2:] - 2.0 * c_tomorrow + c_padded[:, :, 1:-1, :-2]) / (dx ** 2)
-    d2C_dy2 = (c_padded[:, :, 2:, 1:-1] - 2.0 * c_tomorrow + c_padded[:, :, :-2, 1:-1]) / (dx ** 2)
+    d2C_dy2 = (c_padded[:, :, 2:, 1:-1] - 2.0 * c_tomorrow + c_padded[:, :, :-2, 1:-1]) / (dy ** 2)
     
     # 6. TIME DERIVATIVE
     dC_dt = (c_tomorrow - c_today) / dt
@@ -53,11 +56,10 @@ def calculate_physics_loss(predictions, inputs, dx=40.0, dt=86400.0, D=0.05):
         dC_dt 
         + (u_wind_10 * dC_dx + v_wind_10 * dC_dy) # Advected by high-altitude 10m wind
         - D * (d2C_dx2 + d2C_dy2)                 # Dispersed by turbulent diffusion
-        - S                                       # Generated only over the lake surface
+        - emissions                                       # Generated only over the lake surface
     )
     
     # 8. GLOBAL MEAN SQUARED ERROR LOSS
-    # No water mask multiplication! We average the physical error over the entire 2D space.
-    loss = torch.mean(residual ** 2)
+    pde_loss = torch.mean(residual ** 2)
     
-    return loss
+    return pde_loss
