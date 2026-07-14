@@ -51,22 +51,13 @@ def calculate_physics_loss(predictions, inputs, dx=40.0, dt=86400.0, D=0.05):
     
     # 6. TIME DERIVATIVE 
     dC_dt = (c_tomorrow - c_today_physics) / dt
-    
-    # =================================================================
-    # 7. ADVECTION-DIFFUSION-REACTION RESIDUAL (BALANCED)
-    # Apply balancing weights so the optimizer "hears" all physical 
-    # forces equally, rather than just the massive wind term.
-    # =================================================================
-    W_time = 1.0
-    W_advect = 0.0001  # Scales down the massive wind gradient
-    W_diff = 1.0
-    W_emiss = 1.0
 
+    # 7. ADVECTION-DIFFUSION-REACTION RESIDUAL (BALANCED)
     residual = (
-        W_time * dC_dt 
-        + W_advect * (u_wind_10 * dC_dx + v_wind_10 * dC_dy) 
-        - W_diff * D * (d2C_dx2 + d2C_dy2)                 
-        - W_emiss * emissions                               
+        dC_dt 
+        + (u_wind_10 * dC_dx + v_wind_10 * dC_dy) 
+        - D * (d2C_dx2 + d2C_dy2)                 
+        - emissions                               
     )
     
     # 8. GLOBAL MEAN SQUARED ERROR LOSS
@@ -74,4 +65,8 @@ def calculate_physics_loss(predictions, inputs, dx=40.0, dt=86400.0, D=0.05):
     SCALING_FACTOR = 1000.0
     pde_loss = torch.mean((residual * SCALING_FACTOR) ** 2)
 
-    return pde_loss
+    negative_penalty = torch.mean(torch.relu(-c_tomorrow) ** 2) * 50.0
+    
+    total_loss = pde_loss + negative_penalty
+
+    return total_loss

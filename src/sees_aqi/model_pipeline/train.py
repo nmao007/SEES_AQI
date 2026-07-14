@@ -45,8 +45,7 @@ def train_pipeline(epochs=1000, lr=0.002):
     for epoch in range(epochs):
         optimizer.zero_grad()
         
-        raw_predictions = model(inputs)
-        predictions = torch.nn.functional.softplus(raw_predictions)
+        predictions = model(inputs)
         
         # Calculate your physics loss
         loss = calculate_physics_loss(predictions, inputs) 
