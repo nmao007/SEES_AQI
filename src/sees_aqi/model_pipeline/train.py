@@ -10,7 +10,7 @@ from neuralop.models import FNO
 from load_data import load_processed_data
 from physics import calculate_physics_loss
 
-def train_pipeline(epochs=500, lr=0.002):
+def train_pipeline(epochs=1000, lr=0.002):
     # Setup Lightning AI GPU acceleration if available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Training cluster initialized on hardware accelerator: {device}")
@@ -30,7 +30,12 @@ def train_pipeline(epochs=500, lr=0.002):
     
     # Initialize optimization parameter weights
     optimizer = optim.AdamW(model.parameters(), lr=lr)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, 
+        mode='min', 
+        factor=0.5,     # Cut the learning rate in half when stuck
+        patience=10,    # Wait 10 epochs of no improvement before cutting
+    )
     
     print("\nStarting Physics-Informed Neural Operator Training Loop (Powered by neuralop)...")
     model.train()
@@ -51,7 +56,7 @@ def train_pipeline(epochs=500, lr=0.002):
         
         # 2. Record the loss value
         loss_item = loss.item()
-        loss_history.append(loss_item)
+        loss_history.append(loss_item / 1000000)
         
         if epoch % 10 == 0:
             print(f"Epoch {epoch} | Loss: {loss_item:.6f}")
@@ -75,4 +80,4 @@ def train_pipeline(epochs=500, lr=0.002):
     print(f"\nOptimization complete! Model weights cleanly stored to: {save_path}")
 
 if __name__ == "__main__":
-    train_pipeline(epochs=500, lr=0.002)
+    train_pipeline(epochs=1000, lr=0.002)
