@@ -8,7 +8,7 @@ from neuralop.models import FNO
 
 # 2. Import your custom data loading and physics equation blocks
 from load_data import load_processed_data
-from physics import compute_comprehensive_physics_loss
+from physics import calculate_physics_loss
 
 def train_pipeline(epochs=500, lr=0.002):
     # Setup Lightning AI GPU acceleration if available
@@ -44,7 +44,7 @@ def train_pipeline(epochs=500, lr=0.002):
         predictions = torch.nn.functional.softplus(raw_predictions)
         
         # Calculate your physics loss
-        loss = compute_comprehensive_physics_loss(predictions, inputs) 
+        loss = calculate_physics_loss(predictions, inputs) 
         
         loss.backward()
         optimizer.step()
